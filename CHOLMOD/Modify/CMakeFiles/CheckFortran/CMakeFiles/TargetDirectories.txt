@@ -1,2 +1,0 @@
-/home/ubuntu/SuiteSparse/CHOLMOD/Modify/CMakeFiles/CheckFortran/CMakeFiles/edit_cache.dir
-/home/ubuntu/SuiteSparse/CHOLMOD/Modify/CMakeFiles/CheckFortran/CMakeFiles/rebuild_cache.dir
