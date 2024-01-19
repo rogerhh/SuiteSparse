@@ -1586,7 +1586,6 @@ static int check_factor
     {
 	P3 ("%s", ", LDL'.") ;
     }
-
     P4 ("%s", "\n  ordering method used: ") ;
     switch (L->ordering)
     {
@@ -1601,7 +1600,6 @@ static int check_factor
 #endif
 	default:		ERR ("unknown ordering") ;
     }
-
     P4 ("%s", "\n") ;
 
     init_print = print ;
@@ -1623,7 +1621,7 @@ static int check_factor
     /* ---------------------------------------------------------------------- */
     /* check L->ColCount */
     /* ---------------------------------------------------------------------- */
-
+    
     if (ColCount == NULL)
     {
 	ERR ("ColCount vector invalid") ;

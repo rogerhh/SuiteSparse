@@ -1,0 +1,19 @@
+# CHOLMOD, Copyright (c) 2005-2023, Timothy A. Davis.
+# All Rights Reserved.
+# SPDX-License-Identifier: LGPL-2.1-or-later AND GPL-2.0-or-later AND Apache-2.0
+
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+# FIXME: Which flags do we need to statically link CUDA if needed?
+
+Name: CHOLMOD
+URL: https://github.com/DrTimothyAldenDavis/SuiteSparse
+Description: Routines for factorizing sparse symmetric positive definite matrices in SuiteSparse
+Version: 4.2.0
+Requires.private: SuiteSparse_config AMD COLAMD  CAMD CCOLAMD
+Libs: -L${libdir} -lcholmod
+Libs.private:  -lgomp -lpthread -lm -lm -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core -lgomp -l-lpthread -l-lm -l-ldl -l-lpthread -l-lm -l-ldl -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core -lgomp -l-lpthread -l-lm -l-ldl
+Cflags: -I${includedir} 

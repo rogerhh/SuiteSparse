@@ -286,58 +286,29 @@
 
 #undef ALPHA_GAMMA
 
-#define ALPHA_GAMMA(Dj,Alpha,Gamma,W) \
+#define ALPHA_GAMMA(Dj,AlphaC,GammaC,C,AlphaD,GammaD,D) \
 { \
     double dj = Dj ; \
     if (update) \
     { \
 	for (k = 0 ; k < RANK ; k++) \
 	{ \
-	    double w = W [k] ; \
-	    double alpha = Alpha [k] ; \
-	    double a = alpha + (w * w) / dj ; \
-	    dj *= a ; \
-	    Alpha [k] = a ; \
-	    Gamma [k] = (- w / dj) ; \
-	    dj /= alpha ; \
+	    double c = C [k] ; \
+	    double alphaC = AlphaC [k] ; \
+	    double aC = alphaC + (c * c) / dj ; \
+	    dj *= aC ; \
+	    AlphaC [k] = aC ; \
+	    GammaC [k] = (- c / dj) ; \
+	    dj /= alphaC ; \
+	    double d = D [k] ; \
+	    double alphaD = AlphaD [k] ; \
+	    double aD = alphaD - (d * d) / dj ; \
+	    dj *= aD ; \
+	    AlphaD [k] = aD ; \
+	    GammaD [k] = d / dj ; \
+	    dj /= alphaD ; \
 	} \
     } \
-    else \
-    { \
-	for (k = 0 ; k < RANK ; k++) \
-	{ \
-	    double w = W [k] ; \
-	    double alpha = Alpha [k] ; \
-	    double a = alpha - (w * w) / dj ; \
-	    dj *= a ; \
-	    Alpha [k] = a ; \
-	    Gamma [k] = w / dj ; \
-	    dj /= alpha ; \
-	} \
-    } \
-    Dj = ((use_dbound) ? (CHOLMOD(dbound) (dj, Common)) : (dj)) ; \
-}
-
-/* ========================================================================== */
-/* === alpha/gamma2 ========================================================== */
-/* ========================================================================== */
-
-#undef ALPHA_GAMMA2
-
-#define ALPHA_GAMMA2(Dj,Alpha,Gamma,W,U) \
-{ \
-    double dj = Dj ; \
-	for (k = 0 ; k < RANK ; k++) \
-	{ \
-	    double w = W [k] ; \
-	    double u = U [k] ; \
-	    double alpha = Alpha [k] ; \
-	    double a = alpha + (w * w) / dj - (u * u) / dj ; \
-	    dj *= a ; \
-	    Alpha [k] = a ; \
-	    Gamma [k] = (- w / dj) ; \
-	    dj /= alpha ; \
-	} \
     Dj = ((use_dbound) ? (CHOLMOD(dbound) (dj, Common)) : (dj)) ; \
 }
 
@@ -347,24 +318,27 @@
 
 static void NUMERIC (WDIM, RANK)
 (
-    int update,		/* TRUE for update, FALSE for downdate */
     Int j,		/* first column in the path */
     Int e,		/* last column in the path */
-    double Alpha [ ],	/* alpha, for each column of W */
-    double W [ ],	/* W is an n-by-WDIM array, stored in row-major order */
+    double AlphaC [ ],	/* alpha, for each column of C */
+    double AlphaD [ ],	/* alpha, for each column of D */
+    double C [ ],	/* C is an n-by-WDIM array, stored in row-major order */
+    double D [ ],	/* D is an n-by-WDIM array, stored in row-major order */
     cholmod_factor *L,	/* with unit diagonal (diagonal not stored) */
     cholmod_common *Common
 )
 {
 
 #ifdef SIMPLE
-#define w(row,col) W [WDIM*(row) + (col)]
+#define c(row,col) C [WDIM*(row) + (col)]
+#define d(row,col) D [WDIM*(row) + (col)]
 
     /* ---------------------------------------------------------------------- */
     /* concise but slow version for illustration only */
     /* ---------------------------------------------------------------------- */
 
-    double Gamma [WDIM] ;
+    double GammaC [WDIM] ;
+    double GammaD [WDIM] ;
     double *Lx ;
     Int *Li, *Lp, *Lnz ;
     Int p, k ;
@@ -379,22 +353,24 @@ static void NUMERIC (WDIM, RANK)
     for ( ; j <= e ; j = (Lnz [j] > 1) ? (Li [Lp [j] + 1]) : Int_max)
     {
 	/* update the diagonal entry D (j,j) with each column of W */
-	ALPHA_GAMMA (Lx [Lp [j]], Alpha, Gamma, (&(w (j,0)))) ;
+	ALPHA_GAMMA (Lx [Lp [j]], AlphaC, GammaC, (&(c (j,0))), AlphaD, GammaC, (&(d (j,0)))) ;
 	/* update column j of L */
 	for (p = Lp [j] + 1 ; p < Lp [j] + Lnz [j] ; p++)
 	{
-	    /* update row Li [p] of column j of L with each column of W */
+	    /* update row Li [p] of column j of L with each column of C, D */
 	    Int i = Li [p] ;
 	    for (k = 0 ; k < RANK ; k++)
 	    {
-		w (i,k) -= w (j,k) * Lx [p] ;
-		Lx [p] -= Gamma [k] * w (i,k) ;
+		c (i,k) -= c (j,k) * Lx [p] ;
+		d (i,k) -= d (j,k) * Lx [p] ;
+		Lx [p] -= (GammaC [k] * c (i,k) + GammaD [k] * d (i,k)) ;
 	    }
 	}
-	/* clear workspace W */
+	/* clear workspace C, D */
 	for (k = 0 ; k < RANK ; k++)
 	{
-	    w (j,k) = 0 ;
+	    c (j,k) = 0 ;
+	    d (j,k) = 0 ;
 	}
     }
 
