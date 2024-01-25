@@ -328,6 +328,15 @@ static void dfs
 #define WDIM 8
 #include "t_cholmod_updown.c"
 
+#define WDIM 1
+#include "t_cholmod_updown2.c"
+#define WDIM 2
+#include "t_cholmod_updown2.c"
+#define WDIM 4
+#include "t_cholmod_updown2.c"
+#define WDIM 8
+#include "t_cholmod_updown2.c"
+
 
 /* ========================================================================== */
 /* === cholmod_updown_mark ================================================== */
@@ -1659,7 +1668,7 @@ int CHOLMOD(updown_mask3)
 )
 {
     double xj, fl ;
-    double *Lx, *W, *Xx, *Nx ;
+    double *Lx, *W, *WC, *WD, *Xx, *Nx ;
     Int *Li, *Lp, *Lnz, *Cp, *Ci, *Cnz, *Dp, *Di, *Dnz, *Head, *Flag, *Stack, *Lnext, *Iwork,
 	*Set_ps1 [32], *Set_ps2 [32], *ps1, *ps2 ;
     size_t maxrank ;
@@ -1696,7 +1705,7 @@ int CHOLMOD(updown_mask3)
 	ERROR (CHOLMOD_INVALID, "D must have sorted columns") ;
 	return (FALSE) ;
     }
-    if (cncol == dncol)
+    if (cncol != dncol)
     {
 	ERROR (CHOLMOD_INVALID, "C and D dimensions do not match") ;
 	return (FALSE) ;
@@ -1844,7 +1853,9 @@ int CHOLMOD(updown_mask3)
 
     Flag = Common->Flag ;	/* size n, Flag [i] <= mark must hold */
     Head = Common->Head ;	/* size n, Head [i] == EMPTY must hold */
-    W = Common->Xwork ;		/* size n-by-wdim, zero on input and output*/
+    W = Common->Xwork ;		/* size 2n-by-wdim, zero on input and output*/
+    WC = W ;
+    WD = W + wdim * n ;
 
     /* note that Iwork [n .. 2*n-1] (i/i/l) may be in use in rowadd/rowdel: */
     Iwork = Common->Iwork ;
@@ -2674,19 +2685,19 @@ int CHOLMOD(updown_mask3)
 	switch (wdim)
 	{
 	    case 1:
-		updown_1_r (update, C, k, L, W, OrderedPath, npaths, mask,
+		updown2_1_r (C, D, k, L, WC, WD, OrderedPath, npaths, mask,
 		    maskmark, Common) ;
 		break ;
 	    case 2:
-		updown_2_r (update, C, k, L, W, OrderedPath, npaths, mask,
+		updown2_2_r (C, D, k, L, WC, WD, OrderedPath, npaths, mask,
 		    maskmark, Common) ;
 		break ;
 	    case 4:
-		updown_4_r (update, C, k, L, W, OrderedPath, npaths, mask,
+		updown2_4_r (C, D, k, L, WC, WD, OrderedPath, npaths, mask,
 		    maskmark, Common) ;
 		break ;
 	    case 8:
-		updown_8_r (update, C, k, L, W, OrderedPath, npaths, mask,
+		updown2_8_r (C, D, k, L, WC, WD, OrderedPath, npaths, mask,
 		    maskmark, Common) ;
 		break ;
 	}

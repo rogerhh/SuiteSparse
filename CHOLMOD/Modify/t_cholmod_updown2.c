@@ -39,6 +39,16 @@
 /* === routines for numeric update/downdate along one path ================== */
 /* ========================================================================== */
 
+// #include <stdint.h>
+// #include "../Include/cholmod.h"
+// #include "../Include/cholmod_internal.h"
+// #include "../Include/cholmod_template.h"
+// #include "../Include/cholmod_types.h"
+// #ifndef WDIM
+// #define WDIM 8
+// #endif
+
+
 #undef FORM_NAME
 #undef NUMERIC
 
@@ -71,20 +81,21 @@
 #include "t_cholmod_updown2_numkr.c"
 #endif
 
-
 /* ========================================================================== */
 /* === numeric update/downdate for all paths ================================ */
 /* ========================================================================== */
 
 static void NUMERIC (WDIM, r)
 (
-    int update,		/* TRUE for update, FALSE for downdate */
     cholmod_sparse *C,	/* in packed or unpacked, and sorted form */
+			/* no empty columns */
+    cholmod_sparse *D,	/* in packed or unpacked, and sorted form */
 			/* no empty columns */
     Int rank,		/* rank of the update/downdate */
     cholmod_factor *L,	/* with unit diagonal (diagonal not stored) */
 			/* temporary workspaces: */
-    double W [ ],	/* n-by-WDIM dense matrix, initially zero */
+    double WC [ ],	/* n-by-WDIM dense matrix, initially zero */
+    double WD [ ],	/* n-by-WDIM dense matrix, initially zero */
     Path_type Path [ ],
     Int npaths,
     Int mask [ ],	/* size n */
@@ -92,10 +103,20 @@ static void NUMERIC (WDIM, r)
     cholmod_common *Common
 )
 {
-    double Alpha [8] ;
-    double *Cx, *Wpath, *W1, *a ;
+    // Roger notes: 
+    // 1. The workspace W stores the columns of C that we are working on (in row major order). 
+    //    We allocated 2x the workspace to store the columns of D. For ease of implementation
+    //    right now, we will split W into WC and WD, where WD is appended to WC
+    // 2. There are up to WDIM paths in W. 
+    //    WCpath/WDpath denotes the start of the column of path
+    // 3. WC1 and WD1 point to the wfirst column of C and D
+    // 4. aC and aD point to the current AlphaC and alphaD, respectively
+
+    double AlphaC [8] ;
+    double AlphaD [8] ;
+    double *Cx, *Dx, *WCpath, *WDpath, *WC1, *WD1, *aC, *aD ;
     Int i, j, p, ccol, pend, wfirst, e, path, packed ;
-    Int *Ci, *Cp, *Cnz ;
+    Int *Ci, *Cp, *Cnz, *Di, *Dp, *Dnz ;
 
     /* ---------------------------------------------------------------------- */
     /* get inputs */
@@ -110,6 +131,11 @@ static void NUMERIC (WDIM, r)
     ASSERT (L->n == C->nrow) ;
     DEBUG (CHOLMOD(dump_real) ("num_d: in W:", W, WDIM, L->n, FALSE, 1,Common));
 
+    Di = D->i ;
+    Dx = D->x ;
+    Dp = D->p ;
+    Dnz = D->nz ;
+
     /* ---------------------------------------------------------------------- */
     /* scatter C into W */
     /* ---------------------------------------------------------------------- */
@@ -118,7 +144,8 @@ static void NUMERIC (WDIM, r)
     {
 	/* W (:, path) = C (:, Path [path].col) */
 	ccol = Path [path].ccol ;
-	Wpath = W + path ;
+	WCpath = WC + path ;
+	WDpath = WD + path ;
 	PRINT1 (("Ordered Columns [path = "ID"] = "ID"\n", path, ccol)) ;
 	p = Cp [ccol] ;
 	pend = (packed) ? (Cp [ccol+1]) : (p + Cnz [ccol]) ;
@@ -129,14 +156,19 @@ static void NUMERIC (WDIM, r)
 	    ASSERT (i >= 0 && i < (Int) (C->nrow)) ;
 	    if (mask == NULL || mask [i] < maskmark)
 	    {
-		Wpath [WDIM * i] = Cx [p] ;
+		WCpath [WDIM * i] = Cx [p] ;
+		WDpath [WDIM * i] = Dx [p] ;
 	    }
 	    PRINT1 (("    row "ID" : %g mask "ID"\n", i, Cx [p],
 		    (mask) ? mask [i] : 0)) ;
+	    PRINT1 (("    row "ID" : %g mask "ID"\n", i, Dx [p],
+		    (mask) ? mask [i] : 0)) ;
 	}
-	Alpha [path] = 1.0 ;
+	AlphaC [path] = 1.0 ;
+	AlphaD [path] = 1.0 ;
     }
-    DEBUG (CHOLMOD(dump_real) ("num_d: W:", W, WDIM, L->n, FALSE, 1,Common)) ;
+    DEBUG (CHOLMOD(dump_real) ("num_d: WC:", WC, WDIM, L->n, FALSE, 1,Common)) ;
+    DEBUG (CHOLMOD(dump_real) ("num_d: WD:", WD, WDIM, L->n, FALSE, 1,Common)) ;
 
     /* ---------------------------------------------------------------------- */
     /* numeric update/downdate of the paths */
@@ -153,51 +185,53 @@ static void NUMERIC (WDIM, r)
 	ASSERT (e >= 0 && e < (Int) (L->n)) ;
 	ASSERT (j >= 0 && j < (Int) (L->n)) ;
 
-	W1 = W + wfirst ;	/* pointer to row 0, column wfirst of W */
-	a = Alpha + wfirst ;	/* pointer to Alpha [wfirst] */
+	WC1 = WC + wfirst ;	/* pointer to row 0, column wfirst of W */
+	WD1 = WD + wfirst ;	/* pointer to row 0, column wfirst of W */
+	aC = AlphaC + wfirst ;	/* pointer to AlphaC [wfirst] */
+	aD = AlphaD + wfirst ;	/* pointer to AlphaD [wfirst] */
 
 	PRINT1 (("Numerical update/downdate of path "ID"\n", path)) ;
 	PRINT1 (("start "ID" end "ID" wfirst "ID" rank "ID" ccol "ID"\n", j, e,
 		wfirst, Path [path].rank, Path [path].ccol)) ;
 
 #if WDIM == 1
-	NUMERIC (WDIM,1) (update, j, e, a, W1, L, Common) ;
+	NUMERIC (WDIM,1) (j, e, aC, aD, WC1, WD1, L, Common) ;
 #else
 
 	switch (Path [path].rank)
 	{
 	    case 1:
-		NUMERIC (WDIM,1) (update, j, e, a, W1, L, Common) ;
+		NUMERIC (WDIM,1) (j, e, aC, aD, WC1, WD1, L, Common) ;
 		break ;
 
 #if WDIM >= 2
 	    case 2:
-		NUMERIC (WDIM,2) (update, j, e, a, W1, L, Common) ;
+		NUMERIC (WDIM,2) (j, e, aC, aD, WC1, WD1, L, Common) ;
 		break ;
 #endif
 
 #if WDIM >= 4
 	    case 3:
-		NUMERIC (WDIM,3) (update, j, e, a, W1, L, Common) ;
+		NUMERIC (WDIM,3) (j, e, aC, aD, WC1, WD1, L, Common) ;
 		break ;
 	    case 4:
-		NUMERIC (WDIM,4) (update, j, e, a, W1, L, Common) ;
+		NUMERIC (WDIM,4) (j, e, aC, aD, WC1, WD1, L, Common) ;
 		break ;
 #endif
 
 #if WDIM == 8
 	    case 5:
-		NUMERIC (WDIM,5) (update, j, e, a, W1, L, Common) ;
+		NUMERIC (WDIM,5) (j, e, aC, aD, WC1, WD1, L, Common) ;
 		break ;
 	    case 6:
-		NUMERIC (WDIM,6) (update, j, e, a, W1, L, Common) ;
+		NUMERIC (WDIM,6) (j, e, aC, aD, WC1, WD1, L, Common) ;
 		break ;
 	    case 7:
-		NUMERIC (WDIM,7) (update, j, e, a, W1, L, Common) ;
+		NUMERIC (WDIM,7) (j, e, aC, aD, WC1, WD1, L, Common) ;
 		break ;
 	    case 8:
-		NUMERIC (WDIM,8) (update, j, e, a, W1, L, Common) ;
-		break ;
+        NUMERIC (WDIM,8) (j, e, aC, aD, WC1, WD1, L, Common) ;
+        break ;
 #endif
 
 	}

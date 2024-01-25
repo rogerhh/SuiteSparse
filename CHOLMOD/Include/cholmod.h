@@ -3920,6 +3920,20 @@ int cholmod_updown
 int cholmod_l_updown (int, cholmod_sparse *, cholmod_factor *,
     cholmod_common *) ;
 
+int cholmod_updown2
+(
+    /* ---- input ---- */
+    cholmod_sparse *C,	/* the incoming sparse update */
+    cholmod_sparse *D,	/* the incoming sparse downdate */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_updown2 (cholmod_sparse *, cholmod_sparse *, 
+    cholmod_factor *, cholmod_common *) ;
+
 /* -------------------------------------------------------------------------- */
 /* cholmod_updown_solve:  update/downdate, and modify solution to Lx=b */
 /* -------------------------------------------------------------------------- */
@@ -4018,6 +4032,26 @@ int cholmod_updown_mask2
 int cholmod_l_updown_mask2 (int, cholmod_sparse *, int64_t *,
     int64_t *, int64_t, cholmod_factor *, cholmod_dense *,
     cholmod_dense *, cholmod_common *) ;
+
+int cholmod_updown_mask3
+(
+    /* ---- input ---- */
+    cholmod_sparse *C,	/* the incoming sparse update */
+    cholmod_sparse *D,	/* the incoming sparse downdate */
+    int32_t *colmark,	/* Int array of size n.  See cholmod_updown.c */
+    int32_t *mask,		/* size n */
+    int32_t maskmark,
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    cholmod_dense *X,	/* solution to Lx=b (size n-by-1) */
+    cholmod_dense *DeltaB,  /* change in b, zero on output */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_updown_mask3 (cholmod_sparse *, cholmod_sparse *, 
+    int64_t *, int64_t *, int64_t, cholmod_factor *, 
+    cholmod_dense *, cholmod_dense *, cholmod_common *) ;
 
 /* -------------------------------------------------------------------------- */
 /* cholmod_rowadd:  add a row to an LDL' factorization (a rank-2 update) */

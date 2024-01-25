@@ -1,2 +1,4 @@
 timelog.m
 .cache/
+build/
+*.out
