@@ -489,6 +489,9 @@ static void NUMERIC (WDIM, RANK)
 	    ALPHA_GAMMA (Lx [p1], AlphaC, GC1, ZC1, AlphaD, GD1, ZD1) ;
 	    p1++ ;
 
+        printf("after ALPHA_GAMMA 1\n");
+        fflush(stdout);
+
 	    /* -------------------------------------------------------------- */
 	    /* update 2 or 4 columns of L */
 	    /* -------------------------------------------------------------- */
@@ -502,6 +505,9 @@ static void NUMERIC (WDIM, RANK)
 		/* ---------------------------------------------------------- */
 		/* update 4 columns of L */
 		/* ---------------------------------------------------------- */
+
+        printf("here0 \n");
+        fflush(stdout);
 
 		/* p0 and p1 currently point to row j2 in cols j and j1 of L */
 
@@ -564,6 +570,9 @@ static void NUMERIC (WDIM, RANK)
 		ALPHA_GAMMA (Lx [p2], AlphaC, GC2, ZC2, AlphaD, GD2, ZD2) ;
 		p2++ ;
 
+        printf("after ALPHA_GAMMA 2\n");
+        fflush(stdout);
+
 		/* update L (j3,j), L (j3,j1), and L (j3,j2) */
 		{
 		    double lx [3] ;
@@ -590,6 +599,9 @@ static void NUMERIC (WDIM, RANK)
 		/* update D (j3,j3) */
 		ALPHA_GAMMA (Lx [p3], AlphaC, GC3, ZC3, AlphaD, GD3, ZD3) ;
 		p3++ ;
+
+        printf("after ALPHA_GAMMA 3\n");
+        fflush(stdout);
 
 		/* each iteration updates L (i, [j j1 j2 j3]) */
 		for ( ; p0 < pend ; p0++, p1++, p2++, p3++)
@@ -629,6 +641,9 @@ static void NUMERIC (WDIM, RANK)
 		/* update 2 columns of L */
 		/* ---------------------------------------------------------- */
 
+        printf("here5 \n");
+        fflush(stdout);
+
 		parent = j2 ;
 
 		/* cleanup iteration if length is odd */
@@ -638,6 +653,7 @@ static void NUMERIC (WDIM, RANK)
 		    lx [0] = Lx [p0] ;
 		    lx [1] = Lx [p1] ;
 		    wc0 = WC + WDIM * Li [p0] ;
+		    wd0 = WD + WDIM * Li [p0] ;
 
 		    /* for k = 0 to RANK-1 do: */
 		    #define DO(k) \
