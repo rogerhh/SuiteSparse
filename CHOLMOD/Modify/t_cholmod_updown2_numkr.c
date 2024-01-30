@@ -297,7 +297,6 @@
     double dj = Dj ; \
 	for (k = 0 ; k < RANK ; k++) \
 	{ \
-        printf("dj before %f\n", dj) ; \
 	    double c = WC [k] ; \
 	    double alphaC = AlphaC [k] ; \
 	    double aC = alphaC + (c * c) / dj ; \
@@ -305,17 +304,13 @@
         AlphaC [k] = aC ; \
 	    GammaC [k] = (- c / dj) ; \
 	    dj /= alphaC ; \
-        printf("dj = %f  alphaC = %f wc = %f, aC = %f, gammaC = %f\n", dj, alphaC, c, aC, GammaC[k]) ; \
 	    double d = WD [k] ; \
         double alphaD = AlphaD [k] ; \
 	    double aD = alphaD - (d * d) / dj ; \
-        printf("%f %f %f %f\n", alphaD, d, dj, aD); \
 	    dj *= aD ; \
 	    AlphaD [k] = aD ; \
 	    GammaD [k] = d / dj ; \
 	    dj /= alphaD ; \
-        printf("dj = %f alphaD = %f wd = %f, aD = %f, gammaD = %f\n", dj, alphaD, d, aD, GammaD[k]) ; \
-        printf("dj after %f\n", dj) ; \
 	} \
     Dj = ((use_dbound) ? (CHOLMOD(dbound) (dj, Common)) : (dj)) ; \
 }
@@ -372,10 +367,8 @@ static void NUMERIC (WDIM, RANK)
 	    {
 		wc (i,k) -= wc (j,k) * Lxp ;
 		Lxp -= GammaC [k] * wc (i,k) ;
-        printf("%f GammaC[k] * wc(i, k) = %f %f %f\n", Lxp, GammaC [k] * wc (i,k), GammaC[k], wc(i, k));
 		wd (i,k) -= wd (j,k) * Lxp ;
 		Lxp -= GammaD [k] * wd (i,k) ;
-        printf("%f GammaD[k] * wd(i, k) = %f %f %f\n", Lxp, GammaD [k] * wd (i,k), GammaD[k], wd(i, k));
 	    }
 		Lx [p] = Lxp ;
 	}
@@ -436,9 +429,6 @@ static void NUMERIC (WDIM, RANK)
 	ALPHA_GAMMA (Lx [p0], AlphaC, GC0, ZC0, AlphaD, GD0, ZD0) ;
 	p0++ ;
 
-    printf("After ALPHA_GAMMA 0\n");
-    fflush(stdout);
-
 	/* determine how many columns of L to update at the same time */
 	parent = (lnz > 1) ? (Li [p0]) : Int_max ;
 	if (parent <= e && lnz == Lnz [parent] + 1)
@@ -489,9 +479,6 @@ static void NUMERIC (WDIM, RANK)
 	    ALPHA_GAMMA (Lx [p1], AlphaC, GC1, ZC1, AlphaD, GD1, ZD1) ;
 	    p1++ ;
 
-        printf("after ALPHA_GAMMA 1\n");
-        fflush(stdout);
-
 	    /* -------------------------------------------------------------- */
 	    /* update 2 or 4 columns of L */
 	    /* -------------------------------------------------------------- */
@@ -505,9 +492,6 @@ static void NUMERIC (WDIM, RANK)
 		/* ---------------------------------------------------------- */
 		/* update 4 columns of L */
 		/* ---------------------------------------------------------- */
-
-        printf("here0 \n");
-        fflush(stdout);
 
 		/* p0 and p1 currently point to row j2 in cols j and j1 of L */
 
@@ -570,9 +554,6 @@ static void NUMERIC (WDIM, RANK)
 		ALPHA_GAMMA (Lx [p2], AlphaC, GC2, ZC2, AlphaD, GD2, ZD2) ;
 		p2++ ;
 
-        printf("after ALPHA_GAMMA 2\n");
-        fflush(stdout);
-
 		/* update L (j3,j), L (j3,j1), and L (j3,j2) */
 		{
 		    double lx [3] ;
@@ -599,9 +580,6 @@ static void NUMERIC (WDIM, RANK)
 		/* update D (j3,j3) */
 		ALPHA_GAMMA (Lx [p3], AlphaC, GC3, ZC3, AlphaD, GD3, ZD3) ;
 		p3++ ;
-
-        printf("after ALPHA_GAMMA 3\n");
-        fflush(stdout);
 
 		/* each iteration updates L (i, [j j1 j2 j3]) */
 		for ( ; p0 < pend ; p0++, p1++, p2++, p3++)
@@ -640,9 +618,6 @@ static void NUMERIC (WDIM, RANK)
 		/* ---------------------------------------------------------- */
 		/* update 2 columns of L */
 		/* ---------------------------------------------------------- */
-
-        printf("here5 \n");
-        fflush(stdout);
 
 		parent = j2 ;
 
@@ -710,9 +685,6 @@ static void NUMERIC (WDIM, RANK)
 	}
 	else
 	{
-        printf("In cleanup 1 column supernode\n");
-        fflush(stdout);
-
 	    /* -------------------------------------------------------------- */
 	    /* update one column of L */
 	    /* -------------------------------------------------------------- */

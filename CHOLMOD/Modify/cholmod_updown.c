@@ -145,7 +145,7 @@ int CHOLMOD(updown_solve)
  * rest are ignored.
  */
 
-int CHOLMOD(updown_solve2)
+int CHOLMOD(updown2_solve)
 (
     /* ---- input ---- */
     cholmod_sparse *C,	/* the incoming sparse update */

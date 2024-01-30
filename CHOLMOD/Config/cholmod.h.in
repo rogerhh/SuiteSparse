@@ -3960,6 +3960,23 @@ int cholmod_updown_solve
 int cholmod_l_updown_solve (int, cholmod_sparse *, cholmod_factor *,
     cholmod_dense *, cholmod_dense *, cholmod_common *) ;
 
+int cholmod_updown2_solve
+(
+    /* ---- input ---- */
+    cholmod_sparse *C,	/* the incoming sparse update */
+    cholmod_sparse *D,	/* the incoming sparse downdate */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    cholmod_dense *X,	/* solution to Lx=b (size n-by-1) */
+    cholmod_dense *DeltaB,  /* change in b, zero on output */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_updown2_solve (cholmod_sparse *, cholmod_sparse *, 
+    cholmod_factor *, cholmod_dense *, cholmod_dense *, 
+    cholmod_common *) ;
+
 /* -------------------------------------------------------------------------- */
 /* cholmod_updown_mark:  update/downdate, and modify solution to partial Lx=b */
 /* -------------------------------------------------------------------------- */
