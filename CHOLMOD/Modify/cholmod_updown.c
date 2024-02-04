@@ -60,6 +60,16 @@
 
 #include "cholmod_internal.h"
 
+// This is for intel vtune
+#include "ittnotify.h"
+static __itt_domain* numeric_domain = NULL;
+static __itt_domain* path_domain = NULL;
+#ifndef VTUNE_SCATTER_DOMAIN
+#define VTUNE_SCATTER_DOMAIN
+__itt_domain* CHOLMOD(scatter_domain) = NULL;
+#endif
+
+
 #ifndef NGPL
 #ifndef NMODIFY
 
@@ -1667,6 +1677,20 @@ int CHOLMOD(updown_mask3)
     cholmod_common *Common
 )
 {
+
+    if(numeric_domain == NULL) {
+    numeric_domain = __itt_domain_create( "Numeric" );
+    numeric_domain->flags = 1;
+    }
+    if(path_domain == NULL) {
+    path_domain = __itt_domain_create( "Path" );
+    path_domain->flags = 1;
+    }
+    if(CHOLMOD(scatter_domain) == NULL) {
+    CHOLMOD(scatter_domain) = __itt_domain_create( "Numeric.Scatter" );
+    CHOLMOD(scatter_domain)->flags = 1;
+    }
+
     double xj, fl ;
     double *Lx, *W, *WC, *WD, *Xx, *Nx ;
     Int *Li, *Lp, *Lnz, *Cp, *Ci, *Cnz, *Dp, *Di, *Dnz, *Head, *Flag, *Stack, *Lnext, *Iwork,
@@ -1948,6 +1972,7 @@ int CHOLMOD(updown_mask3)
 	/* symbolic update of columns of L */
 	/* ------------------------------------------------------------------ */
 
+    __itt_frame_begin_v3(path_domain, NULL);
 	while (j < n)
 	{
 	    ASSERT (j >= 0 && j < n && Lnz [j] > 0) ;
@@ -2590,6 +2615,7 @@ int CHOLMOD(updown_mask3)
 		j = j2 ;
 	    }
 	}
+    __itt_frame_end_v3(path_domain, NULL);
 
 	/* ensure workspaces are back to the values required on input */
 	ASSERT (CHOLMOD(dump_work) (TRUE, TRUE, TRUE, Common)) ;
@@ -2682,6 +2708,8 @@ int CHOLMOD(updown_mask3)
 
 	ASSERT (CHOLMOD(dump_work) (TRUE, TRUE, wdim, Common)) ;
 
+    __itt_frame_begin_v3(numeric_domain, NULL);
+
 	switch (wdim)
 	{
 	    case 1:
@@ -2701,6 +2729,8 @@ int CHOLMOD(updown_mask3)
 		    maskmark, Common) ;
 		break ;
 	}
+
+    __itt_frame_end_v3(numeric_domain, NULL);
 
 	ASSERT (CHOLMOD(dump_work) (TRUE, TRUE, wdim, Common)) ;
     }

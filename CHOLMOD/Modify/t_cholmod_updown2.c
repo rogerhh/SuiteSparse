@@ -140,6 +140,8 @@ static void NUMERIC (WDIM, r)
     /* scatter C into W */
     /* ---------------------------------------------------------------------- */
 
+    __itt_frame_begin_v3(CHOLMOD(scatter_domain), NULL);
+
     for (path = 0 ; path < rank ; path++)
     {
 	/* W (:, path) = C (:, Path [path].col) */
@@ -169,6 +171,8 @@ static void NUMERIC (WDIM, r)
     }
     DEBUG (CHOLMOD(dump_real) ("num_d: WC:", WC, WDIM, L->n, FALSE, 1,Common)) ;
     DEBUG (CHOLMOD(dump_real) ("num_d: WD:", WD, WDIM, L->n, FALSE, 1,Common)) ;
+
+    __itt_frame_end_v3(CHOLMOD(scatter_domain), NULL);
 
     /* ---------------------------------------------------------------------- */
     /* numeric update/downdate of the paths */

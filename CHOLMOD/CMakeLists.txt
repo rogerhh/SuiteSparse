@@ -293,6 +293,10 @@ configure_file ( "Config/cholmod_version.tex.in"
 include_directories ( Check Cholesky Core MatrixOps Modify Partition
     Supernodal Include ${CMAKE_SOURCE_DIR} )
 
+# For vtune
+include_directories ("/opt/intel/oneapi/vtune/latest/sdk/include")
+link_directories ("/opt/intel/oneapi/vtune/latest/sdk/lib64")
+
 #-------------------------------------------------------------------------------
 # dynamic cholmod library properties
 #-------------------------------------------------------------------------------
