@@ -1982,6 +1982,28 @@ int cholmod_l_change_factor ( int, int, int, int, int, cholmod_factor *,
     cholmod_common *) ;
 
 /* -------------------------------------------------------------------------- */
+/* cholmod_change_factor2:  change the type of factor (e.g., LDL' to LL') 
+ * but allow for more entries for future growth of dimension */
+/* -------------------------------------------------------------------------- */
+
+int cholmod_change_factor2
+(
+    /* ---- input ---- */
+    int to_xtype,	/* to CHOLMOD_PATTERN, _REAL, _COMPLEX, _ZOMPLEX */
+    int to_ll,		/* TRUE: convert to LL', FALSE: LDL' */
+    int to_super,	/* TRUE: convert to supernodal, FALSE: simplicial */
+    int to_packed,	/* TRUE: pack simplicial columns, FALSE: do not pack */
+    int to_monotonic,	/* TRUE: put simplicial columns in order, FALSE: not */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_change_factor2 ( int, int, int, int, int, cholmod_factor *,
+    cholmod_common *) ;
+
+/* -------------------------------------------------------------------------- */
 /* cholmod_pack_factor:  pack the columns of a factor */
 /* -------------------------------------------------------------------------- */
 
@@ -2015,6 +2037,20 @@ int cholmod_reallocate_column
 ) ;
 
 int cholmod_l_reallocate_column (size_t, size_t, cholmod_factor *,
+    cholmod_common *) ;
+
+int cholmod_reallocate_column2
+(
+    /* ---- input ---- */
+    size_t j,		/* the column to reallocate */
+    size_t need,	/* required size of column j */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_reallocate_column2 (size_t, size_t, cholmod_factor *,
     cholmod_common *) ;
 
 /* -------------------------------------------------------------------------- */
@@ -3186,6 +3222,18 @@ int cholmod_factorize
 
 int cholmod_l_factorize (cholmod_sparse *, cholmod_factor *, cholmod_common *) ;
 
+int cholmod_factorize2
+(
+    /* ---- input ---- */
+    cholmod_sparse *A,	/* matrix to factorize */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* resulting factorization */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_factorize2 (cholmod_sparse *, cholmod_factor *, cholmod_common *) ;
+
 /* -------------------------------------------------------------------------- */
 /* cholmod_factorize_p:  factorize, with user-provided permutation or fset */
 /* -------------------------------------------------------------------------- */
@@ -3206,6 +3254,22 @@ int cholmod_factorize_p
 ) ;
 
 int cholmod_l_factorize_p (cholmod_sparse *, double *, int64_t *,
+    size_t, cholmod_factor *, cholmod_common *) ;
+
+int cholmod_factorize2_p
+(
+    /* ---- input ---- */
+    cholmod_sparse *A,	/* matrix to factorize */
+    double beta [2],	/* factorize beta*I+A or beta*I+A'*A */
+    int32_t *fset,	/* subset of 0:(A->ncol)-1 */
+    size_t fsize,	/* size of fset */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* resulting factorization */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_factorize2_p (cholmod_sparse *, double *, int64_t *,
     size_t, cholmod_factor *, cholmod_common *) ;
 
 /* -------------------------------------------------------------------------- */
@@ -3426,6 +3490,25 @@ int cholmod_rowfac
 int cholmod_l_rowfac (cholmod_sparse *, cholmod_sparse *, double *, size_t,
     size_t, cholmod_factor *, cholmod_common *) ;
 
+/* rowfac2 calls change_factor2 to allow for more entries per column
+ * */
+int cholmod_rowfac2
+(
+    /* ---- input ---- */
+    cholmod_sparse *A,	/* matrix to factorize */
+    cholmod_sparse *F,	/* used for A*A' case only. F=A' or A(:,fset)' */
+    double beta [2],	/* factorize beta*I+A or beta*I+A'*A */
+    size_t kstart,	/* first row to factorize */
+    size_t kend,	/* last row to factorize is kend-1 */
+    /* ---- in/out --- */
+    cholmod_factor *L,
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_rowfac2 (cholmod_sparse *, cholmod_sparse *, double *, size_t,
+    size_t, cholmod_factor *, cholmod_common *) ;
+
 /* -------------------------------------------------------------------------- */
 /* cholmod_rowfac_mask:  incremental simplicial factorization */
 /* -------------------------------------------------------------------------- */
@@ -3471,6 +3554,27 @@ int cholmod_rowfac_mask2
 ) ;
 
 int cholmod_l_rowfac_mask2 (cholmod_sparse *, cholmod_sparse *, double *,
+    size_t, size_t, int64_t *, int64_t, int64_t *,
+    cholmod_factor *, cholmod_common *) ;
+
+int cholmod_rowfac2_mask2
+(
+    /* ---- input ---- */
+    cholmod_sparse *A,	/* matrix to factorize */
+    cholmod_sparse *F,	/* used for A*A' case only. F=A' or A(:,fset)' */
+    double beta [2],	/* factorize beta*I+A or beta*I+A'*A */
+    size_t kstart,	/* first row to factorize */
+    size_t kend,	/* last row to factorize is kend-1 */
+    int32_t *mask,	/* if mask[i] >= maskmark, then set row i to zero */
+    int32_t maskmark,
+    int32_t *RLinkUp,	/* link list of rows to compute */
+    /* ---- in/out --- */
+    cholmod_factor *L,
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_rowfac2_mask2 (cholmod_sparse *, cholmod_sparse *, double *,
     size_t, size_t, int64_t *, int64_t, int64_t *,
     cholmod_factor *, cholmod_common *) ;
 
@@ -3934,6 +4038,20 @@ int cholmod_updown2
 int cholmod_l_updown2 (cholmod_sparse *, cholmod_sparse *, 
     cholmod_factor *, cholmod_common *) ;
 
+int cholmod_updown3
+(
+    /* ---- input ---- */
+    int update,		/* TRUE for update, FALSE for downdate */
+    cholmod_sparse *C,	/* the incoming sparse update */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_updown (int, cholmod_sparse *, cholmod_factor *,
+    cholmod_common *) ;
+
 /* -------------------------------------------------------------------------- */
 /* cholmod_updown_solve:  update/downdate, and modify solution to Lx=b */
 /* -------------------------------------------------------------------------- */
@@ -3976,6 +4094,22 @@ int cholmod_updown2_solve
 int cholmod_updown2_solve (cholmod_sparse *, cholmod_sparse *, 
     cholmod_factor *, cholmod_dense *, cholmod_dense *, 
     cholmod_common *) ;
+
+int cholmod_updown3_solve
+(
+    /* ---- input ---- */
+    int update,		/* TRUE for update, FALSE for downdate */
+    cholmod_sparse *C,	/* the incoming sparse update */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    cholmod_dense *X,	/* solution to Lx=b (size n-by-1) */
+    cholmod_dense *DeltaB,  /* change in b, zero on output */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_updown3_solve (int, cholmod_sparse *, cholmod_factor *,
+    cholmod_dense *, cholmod_dense *, cholmod_common *) ;
 
 /* -------------------------------------------------------------------------- */
 /* cholmod_updown_mark:  update/downdate, and modify solution to partial Lx=b */
@@ -4069,6 +4203,26 @@ int cholmod_updown_mask3
 int cholmod_l_updown_mask3 (cholmod_sparse *, cholmod_sparse *, 
     int64_t *, int64_t *, int64_t, cholmod_factor *, 
     cholmod_dense *, cholmod_dense *, cholmod_common *) ;
+
+int cholmod_updown_mask4
+(
+    /* ---- input ---- */
+    int update,		/* TRUE for update, FALSE for downdate */
+    cholmod_sparse *C,	/* the incoming sparse update */
+    int32_t *colmark,	/* array of size n.  See cholmod_updown.c */
+    int32_t *mask,	/* size n */
+    int32_t maskmark,
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    cholmod_dense *X,	/* solution to Lx=b (size n-by-1) */
+    cholmod_dense *DeltaB,  /* change in b, zero on output */
+    /* --------------- */
+    cholmod_common *Common
+) ;
+
+int cholmod_l_updown_mask4 (int, cholmod_sparse *, int64_t *,
+    int64_t *, int64_t, cholmod_factor *, cholmod_dense *,
+    cholmod_dense *, cholmod_common *) ;
 
 /* -------------------------------------------------------------------------- */
 /* cholmod_rowadd:  add a row to an LDL' factorization (a rank-2 update) */

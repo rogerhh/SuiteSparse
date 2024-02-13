@@ -392,7 +392,6 @@ static void ll_super_to_super_symbolic
     DEBUG (CHOLMOD(dump_factor) (L, "done  to super symbolic", Common)) ;
 }
 
-
 /* ========================================================================== */
 /* === simplicial_symbolic_to_simplicial_numeric ============================ */
 /* ========================================================================== */
@@ -507,7 +506,7 @@ static void simplicial_symbolic_to_simplicial_numeric
 	    {
 		xlen = (double) len ;
 		xlen = grow1 * xlen + grow2 ;
-		xlen = MIN (xlen, n-j) ;
+		// xlen = MIN (xlen, n-j) ;
 		len = (Int) xlen ;
 	    }
 	    ASSERT (len >= 1 && len <= n-j) ;
@@ -523,7 +522,250 @@ static void simplicial_symbolic_to_simplicial_numeric
 		xlnz = (double) lnz ;
 		xlnz *= grow0 ;
 		xlnz = MIN (xlnz, (double) SIZE_MAX) ;
-		xlnz = MIN (xlnz, ((double) n * (double) n + (double) n) / 2) ;
+		// xlnz = MIN (xlnz, ((double) n * (double) n + (double) n) / 2) ;
+		lnz = (Int) xlnz ;
+	    }
+	}
+    }
+
+    lnz = MAX (1, lnz) ;
+
+    if (!ok)
+    {
+	ERROR (CHOLMOD_TOO_LARGE, "problem too large") ;
+    }
+
+    /* allocate L->i, L->x, and L->z */
+    PRINT1 (("resizing from zero size to lnz "ID"\n", lnz)) ;
+    ASSERT (L->nzmax == 0) ;
+    e = (to_xtype == CHOLMOD_COMPLEX ? 2 : 1) ;
+    if (!ok || !CHOLMOD(realloc_multiple) (lnz, 1, to_xtype, &(L->i), NULL,
+		&(L->x), &(L->z), &(L->nzmax), Common))
+    {
+	L->p    = CHOLMOD(free) (n+1, sizeof (Int),      L->p, Common) ;
+	L->nz   = CHOLMOD(free) (n,   sizeof (Int),      L->nz, Common) ;
+	L->prev = CHOLMOD(free) (n+2, sizeof (Int),      L->prev, Common) ;
+	L->next = CHOLMOD(free) (n+2, sizeof (Int),      L->next, Common) ;
+	L->i    = CHOLMOD(free) (lnz, sizeof (Int),      L->i, Common) ;
+	L->x    = CHOLMOD(free) (lnz, e*sizeof (double), L->x, Common) ;
+	L->z    = CHOLMOD(free) (lnz, sizeof (double),   L->z, Common) ;
+	PRINT1 (("cannot realloc simplicial numeric\n")) ;
+	return ;	/* out of memory */
+    }
+
+    /* ============================================== commit the changes to L */
+
+    /* initialize L to be the identity matrix */
+    L->xtype = to_xtype ;
+    L->dtype = DTYPE ;
+    L->minor = n ;
+
+    Li = L->i ;
+    Lx = L->x ;
+    Lz = L->z ;
+
+#if 0
+    if (lnz == 1)
+    {
+	/* the user won't expect to access this entry, but some CHOLMOD
+	 * routines may.  Set it to zero so that valgrind doesn't complain. */
+	switch (to_xtype)
+	{
+	    case CHOLMOD_REAL:
+		Lx [0] = 0 ;
+		break ;
+
+	    case CHOLMOD_COMPLEX:
+		Lx [0] = 0 ;
+		Lx [1] = 0 ;
+		break ;
+
+	    case CHOLMOD_ZOMPLEX:
+		Lx [0] = 0 ;
+		Lz [0] = 0 ;
+		break ;
+	}
+    }
+#endif
+
+    if (packed >= 0)
+    {
+	/* create the unit diagonal for either the LL' or LDL' case */
+
+	switch (L->xtype)
+	{
+	    case CHOLMOD_REAL:
+		for (j = 0 ; j < n ; j++)
+		{
+		    ASSERT (Lp [j] < Lp [j+1]) ;
+		    p = Lp [j] ;
+		    Li [p] = j ;
+		    Lx [p] = 1 ;
+		}
+		break ;
+
+	    case CHOLMOD_COMPLEX:
+		for (j = 0 ; j < n ; j++)
+		{
+		    ASSERT (Lp [j] < Lp [j+1]) ;
+		    p = Lp [j] ;
+		    Li [p] = j ;
+		    Lx [2*p  ] = 1 ;
+		    Lx [2*p+1] = 0 ;
+		}
+		break ;
+
+	    case CHOLMOD_ZOMPLEX:
+		for (j = 0 ; j < n ; j++)
+		{
+		    ASSERT (Lp [j] < Lp [j+1]) ;
+		    p = Lp [j] ;
+		    Li [p] = j ;
+		    Lx [p] = 1 ;
+		    Lz [p] = 0 ;
+		}
+		break ;
+	}
+    }
+
+    L->is_ll = to_ll ;
+
+    PRINT1 (("done convert simplicial symbolic to numeric\n")) ;
+}
+
+/* ========================================================================== */
+/* === simplicial_symbolic_to_simplicial_numeric2 ============================ */
+/* ========================================================================== */
+
+/* Convert a simplicial symbolic L to a simplicial numeric L; allocate space
+ * for L using L->ColCount from symbolic analysis, and set L to identity.
+ *
+ * If packed < 0, then this routine is creating a copy of another factor
+ * (via cholmod_copy_factor).  In this case, the space is not initialized. 
+ *
+ * This modified routine allows for more than n-j entries in the jth column */
+
+static void simplicial_symbolic_to_simplicial_numeric2
+(
+    cholmod_factor *L,
+    int to_ll,
+    int packed,
+    int to_xtype,
+    cholmod_common *Common
+)
+{
+    double grow0, grow1, xlen, xlnz ;
+    double *Lx, *Lz ;
+    Int *Li, *Lp, *Lnz, *ColCount ;
+    Int n, grow, grow2, p, j, lnz, len, ok, e ;
+
+    ASSERT (L->xtype == CHOLMOD_PATTERN && !(L->is_super)) ;
+    if (!allocate_simplicial_numeric (L, Common))
+    {
+	PRINT1 (("out of memory, allocate simplicial numeric\n")) ;
+	return ;	/* out of memory */
+    }
+    ASSERT (L->ColCount != NULL && L->nz != NULL && L->p != NULL) ;
+    ASSERT (L->x == NULL && L->z == NULL && L->i == NULL) ;
+
+    ColCount = L->ColCount ;
+    Lnz = L->nz ;
+    Lp = L->p ;
+    ok = TRUE ;
+    n = L->n ;
+
+    if (packed < 0)
+    {
+
+	/* ------------------------------------------------------------------ */
+	/* used by cholmod_copy_factor to allocate a copy of a factor object */
+	/* ------------------------------------------------------------------ */
+
+	lnz = L->nzmax ;
+	L->nzmax = 0 ;
+
+    }
+    else if (packed)
+    {
+
+	/* ------------------------------------------------------------------ */
+	/* LDL' or LL' packed */
+	/* ------------------------------------------------------------------ */
+
+	PRINT1 (("convert to packed LL' or LDL'\n")) ;
+	lnz = 0 ;
+	for (j = 0 ; ok && j < n ; j++)
+	{
+	    /* ensure len is in the range 1 to n-j */
+	    len = ColCount [j] ;
+	    len = MAX (1, len) ;
+	    len = MIN (len, n-j) ;
+	    lnz += len ;
+	    ok = (lnz >= 0) ;
+	}
+	for (j = 0 ; j <= n ; j++)
+	{
+	    Lp [j] = j ;
+	}
+	for (j = 0 ; j < n ; j++)
+	{
+	    Lnz [j] = 1 ;
+	}
+
+    }
+    else
+    {
+
+	/* ------------------------------------------------------------------ */
+	/* LDL' unpacked */
+	/* ------------------------------------------------------------------ */
+
+	PRINT1 (("convert to unpacked\n")) ;
+	/* compute new lnzmax */
+	/* if any parameter is NaN, grow is false */
+	grow0 = Common->grow0 ;
+	grow1 = Common->grow1 ;
+	grow2 = Common->grow2 ;
+	grow0 = IS_NAN (grow0) ? 1 : grow0 ;
+	grow1 = IS_NAN (grow1) ? 1 : grow1 ;
+	/* fl.pt. compare, but no NaN's: */
+	grow = (grow0 >= 1.0) && (grow1 >= 1.0) && (grow2 > 0) ;
+	PRINT1 (("init, grow1 %g grow2 "ID"\n", grow1, grow2)) ;
+	/* initialize Lp and Lnz for each column */
+	lnz = 0 ;
+	for (j = 0 ; ok && j < n ; j++)
+	{
+	    Lp [j] = lnz ;
+	    Lnz [j] = 1 ;
+
+	    /* ensure len is in the range 1 to n-j */
+	    len = ColCount [j] ;
+	    len = MAX (1, len) ;
+	    len = MIN (len, n-j) ;
+
+	    /* compute len in double to avoid integer overflow */
+	    PRINT1 (("ColCount ["ID"] = "ID"\n", j, len)) ;
+	    if (grow)
+	    {
+		xlen = (double) len ;
+		xlen = grow1 * xlen + grow2 ;
+		// xlen = MIN (xlen, n-j) ;
+		len = (Int) xlen ;
+	    }
+	    // ASSERT (len >= 1 && len <= n-j) ;
+	    lnz += len ;
+	    ok = (lnz >= 0) ;
+	}
+	if (ok)
+	{
+	    Lp [n] = lnz ;
+	    if (grow)
+	    {
+		/* add extra space */
+		xlnz = (double) lnz ;
+		xlnz *= grow0 ;
+		xlnz = MIN (xlnz, (double) SIZE_MAX) ;
+		// xlnz = MIN (xlnz, ((double) n * (double) n + (double) n) / 2) ;
 		lnz = (Int) xlnz ;
 	    }
 	}
@@ -987,6 +1229,243 @@ static int super_symbolic_to_ll_super
     return (TRUE) ;
 }
 
+
+/* ========================================================================== */
+/* === cholmod_change_factor2 ================================================ */
+/* ========================================================================== */
+
+/* Convert a factor L.  Some conversions simply allocate uninitialized space
+ * that meant to be filled later.
+ *
+ * If the conversion fails, the factor is left in its original form, with one
+ * exception.  Converting a supernodal symbolic factor to a simplicial numeric
+ * one (with L=D=I) may leave the factor in simplicial symbolic form.
+ *
+ * Memory allocated for each conversion is listed below.
+ *
+ * cholmod_change_factor2 allows for the jth column to have more than n-j entries
+ * for future dimension changes
+ */
+
+int CHOLMOD(change_factor2)
+(
+    /* ---- input ---- */
+    int to_xtype,	/* convert to CHOLMOD_PATTERN, _REAL, _COMPLEX, or
+			 * _ZOMPLEX */
+    int to_ll,		/* TRUE: convert to LL', FALSE: LDL' */
+    int to_super,	/* TRUE: convert to supernodal, FALSE: simplicial */
+    int to_packed,	/* TRUE: pack simplicial columns, FALSE: do not pack */
+    int to_monotonic,	/* TRUE: put simplicial columns in order, FALSE: not */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    /* --------------- */
+    cholmod_common *Common
+)
+{
+
+    /* ---------------------------------------------------------------------- */
+    /* get inputs */
+    /* ---------------------------------------------------------------------- */
+
+    RETURN_IF_NULL_COMMON (FALSE) ;
+    RETURN_IF_NULL (L, FALSE) ;
+    RETURN_IF_XTYPE_INVALID (L, CHOLMOD_PATTERN, CHOLMOD_ZOMPLEX, FALSE) ;
+    if (to_xtype < CHOLMOD_PATTERN || to_xtype > CHOLMOD_ZOMPLEX)
+    {
+	ERROR (CHOLMOD_INVALID, "xtype invalid") ;
+	return (FALSE) ;
+    }
+    Common->status = CHOLMOD_OK ;
+
+    PRINT1 (("-----convert from (%d,%d,%d,%d,%d) to (%d,%d,%d,%d,%d)\n",
+    L->xtype, L->is_ll, L->is_super, L_is_packed (L, Common), L->is_monotonic,
+    to_xtype, to_ll,    to_super,    to_packed,               to_monotonic)) ;
+
+    /* ensure all parameters are TRUE/FALSE */
+    to_ll = BOOLEAN (to_ll) ;
+    to_super = BOOLEAN (to_super) ;
+
+    ASSERT (BOOLEAN (L->is_ll) == L->is_ll) ;
+    ASSERT (BOOLEAN (L->is_super) == L->is_super) ;
+
+    if (to_super && to_xtype == CHOLMOD_ZOMPLEX)
+    {
+	ERROR (CHOLMOD_INVALID, "supernodal zomplex L not supported") ;
+	return (FALSE) ;
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* convert */
+    /* ---------------------------------------------------------------------- */
+
+    if (to_xtype == CHOLMOD_PATTERN)
+    {
+
+	/* ------------------------------------------------------------------ */
+	/* convert to symbolic */
+	/* ------------------------------------------------------------------ */
+
+	if (!to_super)
+	{
+
+	    /* -------------------------------------------------------------- */
+	    /* convert any factor into a simplicial symbolic factor */
+	    /* -------------------------------------------------------------- */
+
+	    any_to_simplicial_symbolic (L, to_ll, Common) ;    /* cannot fail */
+
+	}
+	else
+	{
+
+	    /* -------------------------------------------------------------- */
+	    /* convert to a supernodal symbolic factor */
+	    /* -------------------------------------------------------------- */
+
+	    if (L->xtype != CHOLMOD_PATTERN && L->is_super)
+	    {
+		/* convert from supernodal numeric to supernodal symbolic.
+		 * this preserves symbolic pattern of L, discards numeric
+		 * values */
+		ll_super_to_super_symbolic (L, Common) ;       /* cannot fail */
+	    }
+	    else if (L->xtype == CHOLMOD_PATTERN && !(L->is_super))
+	    {
+		/* convert from simplicial symbolic to supernodal symbolic.
+		 * contents of supernodal pattern are uninitialized.  Not meant
+		 * for the end user. */
+		simplicial_symbolic_to_super_symbolic (L, Common) ;
+	    }
+	    else
+	    {
+		/* cannot convert from simplicial numeric to supernodal
+		 * symbolic */
+		ERROR (CHOLMOD_INVALID,
+			"cannot convert L to supernodal symbolic") ;
+	    }
+	}
+
+    }
+    else
+    {
+
+	/* ------------------------------------------------------------------ */
+	/* convert to numeric */
+	/* ------------------------------------------------------------------ */
+	    
+	if (to_super)
+	{
+
+	    /* -------------------------------------------------------------- */
+	    /* convert to supernodal numeric factor */
+	    /* -------------------------------------------------------------- */
+
+	    if (L->xtype == CHOLMOD_PATTERN)
+	    {
+		if (L->is_super)
+		{
+		    /* Convert supernodal symbolic to supernodal numeric.
+		     * Contents of supernodal numeric values are uninitialized.
+		     * This is used by cholmod_super_numeric.  Not meant for
+		     * the end user. */
+		    super_symbolic_to_ll_super (to_xtype, L, Common) ;
+		}
+		else
+		{
+		    /* Convert simplicial symbolic to supernodal numeric.
+		     * Contents not defined.  This is used by
+		     * Core/cholmod_copy_factor only.  Not meant for the end
+		     * user. */
+		    if (!simplicial_symbolic_to_super_symbolic (L, Common))
+		    {
+			/* failure, convert back to simplicial symbolic */
+			any_to_simplicial_symbolic (L, to_ll, Common) ;
+		    }
+		    else
+		    {
+			/* conversion to super symbolic OK, allocate numeric
+			 * part */
+			super_symbolic_to_ll_super (to_xtype, L, Common) ;
+		    }
+		}
+	    }
+	    else
+	    {
+		/* nothing to do if L is already in supernodal numeric form */
+		if (!(L->is_super))
+		{
+		    ERROR (CHOLMOD_INVALID,
+			"cannot convert simplicial L to supernodal") ;
+		}
+		/* FUTURE WORK: convert to/from supernodal LL' and LDL' */
+	    }
+
+	}
+	else
+	{
+
+	    /* -------------------------------------------------------------- */
+	    /* convert any factor to simplicial numeric */
+	    /* -------------------------------------------------------------- */
+
+	    if (L->xtype == CHOLMOD_PATTERN && !(L->is_super))
+	    {
+
+		/* ---------------------------------------------------------- */
+		/* convert simplicial symbolic to simplicial numeric (L=I,D=I)*/
+		/* ---------------------------------------------------------- */
+
+		simplicial_symbolic_to_simplicial_numeric2 (L, to_ll, to_packed,
+			to_xtype, Common) ;
+
+	    }
+	    else if (L->xtype != CHOLMOD_PATTERN && L->is_super)
+	    {
+
+		/* ---------------------------------------------------------- */
+		/* convert a supernodal LL' to simplicial numeric */
+		/* ---------------------------------------------------------- */
+
+		ll_super_to_simplicial_numeric (L, to_packed, to_ll, Common) ;
+
+	    }
+	    else if (L->xtype == CHOLMOD_PATTERN && L->is_super)
+	    {
+
+		/* ---------------------------------------------------------- */
+		/* convert a supernodal symbolic to simplicial numeric (L=D=I)*/
+		/* ---------------------------------------------------------- */
+
+		any_to_simplicial_symbolic (L, to_ll, Common) ;
+		/* if the following fails, it leaves the factor in simplicial
+		 * symbolic form */
+		simplicial_symbolic_to_simplicial_numeric (L, to_ll, to_packed,
+			to_xtype, Common) ;
+
+	    }
+	    else
+	    {
+
+		/* ---------------------------------------------------------- */
+		/* change a simplicial numeric factor */
+		/* ---------------------------------------------------------- */
+
+		/* change LL' to LDL', LDL' to LL', or leave as-is.  pack the
+		 * columns of L, or leave as-is.  Ensure the columns are
+		 * monotonic, or leave as-is. */
+
+		change_simplicial_numeric (L, to_ll, to_packed, to_monotonic,
+			Common) ;
+	    }
+	}
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* return result */
+    /* ---------------------------------------------------------------------- */
+
+    return (Common->status >= CHOLMOD_OK) ;
+}
 
 /* ========================================================================== */
 /* === cholmod_change_factor ================================================ */

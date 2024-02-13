@@ -174,6 +174,22 @@
 #include "t_cholmod_rowfac.c"
 #undef MASK
 
+#define REAL
+#include "t_cholmod_rowfac2.c"
+#define COMPLEX
+#include "t_cholmod_rowfac2.c"
+#define ZOMPLEX
+#include "t_cholmod_rowfac2.c"
+
+#define MASK
+#define REAL
+#include "t_cholmod_rowfac2.c"
+#define COMPLEX
+#include "t_cholmod_rowfac2.c"
+#define ZOMPLEX
+#include "t_cholmod_rowfac2.c"
+#undef MASK
+
 
 /* ========================================================================== */
 /* === cholmod_row_subtree ================================================== */
@@ -588,6 +604,24 @@ int CHOLMOD(rowfac)
 	Common)) ;
 }
 
+int CHOLMOD(rowfac2)
+(
+    /* ---- input ---- */
+    cholmod_sparse *A,	/* matrix to factorize */
+    cholmod_sparse *F,	/* used for A*A' case only. F=A' or A(:,f)' */
+    double beta [2],	/* factorize beta*I+A or beta*I+AA' */
+    size_t kstart,	/* first row to factorize */
+    size_t kend,	/* last row to factorize is kend-1 */
+    /* ---- in/out --- */
+    cholmod_factor *L,
+    /* --------------- */
+    cholmod_common *Common
+)
+{
+    return (CHOLMOD(rowfac2_mask2) (A, F, beta, kstart, kend, NULL, 0, NULL, L,
+	Common)) ;
+}
+
 
 /* ========================================================================== */
 /* === cholmod_rowfac_mask ================================================== */
@@ -753,6 +787,152 @@ int CHOLMOD(rowfac_mask2)
 
 	    case CHOLMOD_ZOMPLEX:
 		ok = z_cholmod_rowfac_mask (A, F, beta, kstart, kend,
+		    mask, maskmark, RLinkUp, L, Common) ;
+		break ;
+	}
+    }
+
+    return (ok) ;
+}
+
+/* ========================================================================== */
+/* === cholmod_rowfac2_mask2 ================================================= */
+/* ========================================================================== */
+
+/* This is the same routine as CHOLMOD(rowfac2_mask2), except that it calls a special
+ * t_cholmod_rowfac2 routine that allocates more than n-j entries in the jth row */
+
+int CHOLMOD(rowfac2_mask2)
+(
+    /* ---- input ---- */
+    cholmod_sparse *A,	/* matrix to factorize */
+    cholmod_sparse *F,	/* used for A*A' case only. F=A' or A(:,f)' */
+    double beta [2],	/* factorize beta*I+A or beta*I+AA' */
+    size_t kstart,	/* first row to factorize */
+    size_t kend,	/* last row to factorize is kend-1 */
+    Int *mask,		/* size A->nrow. if mask[i] >= maskmark row i is set
+                           to zero */
+    Int maskmark,       /* for mask [i] test */
+    Int *RLinkUp,	/* size A->nrow. link list of rows to compute */
+    /* ---- in/out --- */
+    cholmod_factor *L,
+    /* --------------- */
+    cholmod_common *Common
+)
+{
+    Int n ;
+    size_t s ;
+    int ok = TRUE ;
+
+    /* ---------------------------------------------------------------------- */
+    /* check inputs */
+    /* ---------------------------------------------------------------------- */
+
+    RETURN_IF_NULL_COMMON (FALSE) ;
+    RETURN_IF_NULL (A, FALSE) ;
+    RETURN_IF_NULL (L, FALSE) ;
+    RETURN_IF_XTYPE_INVALID (A, CHOLMOD_REAL, CHOLMOD_ZOMPLEX, FALSE) ;
+    RETURN_IF_XTYPE_INVALID (L, CHOLMOD_PATTERN, CHOLMOD_ZOMPLEX, FALSE) ;
+    if (L->xtype != CHOLMOD_PATTERN && A->xtype != L->xtype)
+    {
+	ERROR (CHOLMOD_INVALID, "xtype of A and L do not match") ;
+	return (FALSE) ;
+    }
+    if (L->is_super)
+    {
+	ERROR (CHOLMOD_INVALID, "can only do simplicial factorization");
+	return (FALSE) ;
+    }
+    if (A->stype == 0)
+    {
+	RETURN_IF_NULL (F, FALSE) ;
+	if (A->xtype != F->xtype)
+	{
+	    ERROR (CHOLMOD_INVALID, "xtype of A and F do not match") ;
+	    return (FALSE) ;
+	}
+    }
+    if (A->stype < 0)
+    {
+	/* symmetric lower triangular form not supported */
+	ERROR (CHOLMOD_INVALID, "symmetric lower not supported") ;
+	return (FALSE) ;
+    }
+    if (kend > L->n)
+    {
+	ERROR (CHOLMOD_INVALID, "kend invalid") ;
+	return (FALSE) ;
+    }
+    if (A->nrow != L->n)
+    {
+	ERROR (CHOLMOD_INVALID, "dimensions of A and L do not match") ;
+	return (FALSE) ;
+    }
+    Common->status = CHOLMOD_OK ;
+    Common->rowfacfl = 0 ;
+
+    /* ---------------------------------------------------------------------- */
+    /* allocate workspace */
+    /* ---------------------------------------------------------------------- */
+
+    /* Xwork is of size n for the real case, 2*n for complex/zomplex */
+    n = L->n  ;
+
+    /* s = ((A->xtype != CHOLMOD_REAL) ? 2:1)*n */
+    s = CHOLMOD(mult_size_t) (n, ((A->xtype != CHOLMOD_REAL) ? 2:1), &ok) ;
+    if (!ok)
+    {
+	ERROR (CHOLMOD_TOO_LARGE, "problem too large") ;
+	return (FALSE) ;
+    }
+
+    CHOLMOD(allocate_work) (n, n, s, Common) ;
+    if (Common->status < CHOLMOD_OK)
+    {
+	return (FALSE) ;
+    }
+    ASSERT (CHOLMOD(dump_work) (TRUE, TRUE, A->nrow, Common)) ;
+
+    /* ---------------------------------------------------------------------- */
+    /* factorize the matrix, using template routine */
+    /* ---------------------------------------------------------------------- */
+
+    if (RLinkUp == NULL)
+    {
+
+	switch (A->xtype)
+	{
+	    case CHOLMOD_REAL:
+		ok = r_cholmod_rowfac2 (A, F, beta, kstart, kend, L, Common) ;
+		break ;
+
+	    case CHOLMOD_COMPLEX:
+		ok = c_cholmod_rowfac2 (A, F, beta, kstart, kend, L, Common) ;
+		break ;
+
+	    case CHOLMOD_ZOMPLEX:
+		ok = z_cholmod_rowfac2 (A, F, beta, kstart, kend, L, Common) ;
+		break ;
+	}
+
+    }
+    else
+    {
+
+	switch (A->xtype)
+	{
+	    case CHOLMOD_REAL:
+		ok = r_cholmod_rowfac2_mask (A, F, beta, kstart, kend,
+		    mask, maskmark, RLinkUp, L, Common) ;
+		break ;
+
+	    case CHOLMOD_COMPLEX:
+		ok = c_cholmod_rowfac2_mask (A, F, beta, kstart, kend,
+		    mask, maskmark, RLinkUp, L, Common) ;
+		break ;
+
+	    case CHOLMOD_ZOMPLEX:
+		ok = z_cholmod_rowfac2_mask (A, F, beta, kstart, kend,
 		    mask, maskmark, RLinkUp, L, Common) ;
 		break ;
 	}

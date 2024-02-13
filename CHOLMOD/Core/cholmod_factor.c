@@ -464,6 +464,182 @@ int CHOLMOD(reallocate_column)
     return (TRUE) ;
 }
 
+// Reallocate column but leave more space for growth
+int CHOLMOD(reallocate_column2)
+(
+    /* ---- input ---- */
+    size_t j,		/* the column to reallocate */
+    size_t need,	/* required size of column j */
+    /* ---- in/out --- */
+    cholmod_factor *L,	/* factor to modify */
+    /* --------------- */
+    cholmod_common *Common
+)
+{
+    double xneed ;
+    double *Lx, *Lz ;
+    Int *Lp, *Lprev, *Lnext, *Li, *Lnz ;
+    Int n, pold, pnew, len, k, tail ;
+
+    /* ---------------------------------------------------------------------- */
+    /* get inputs */
+    /* ---------------------------------------------------------------------- */
+
+    RETURN_IF_NULL_COMMON (FALSE) ;
+    RETURN_IF_NULL (L, FALSE) ;
+    RETURN_IF_XTYPE_INVALID (L, CHOLMOD_REAL, CHOLMOD_ZOMPLEX, FALSE) ;
+    if (L->is_super)
+    {
+	ERROR (CHOLMOD_INVALID, "L must be simplicial") ;
+	return (FALSE) ;
+    }
+    n = L->n ;
+    if (j >= L->n || need == 0)
+    {
+	ERROR (CHOLMOD_INVALID, "j invalid") ;
+	return (FALSE) ;	    /* j out of range */
+    }
+    Common->status = CHOLMOD_OK ;
+
+    DEBUG (CHOLMOD(dump_factor) (L, "start colrealloc", Common)) ;
+
+    // printf("In cholmod_factor.c reallocate_column2\n");
+
+    /* ---------------------------------------------------------------------- */
+    /* increase the size of L if needed */
+    /* ---------------------------------------------------------------------- */
+
+    /* head = n+1 ; */
+    tail = n ;
+    Lp = L->p ;
+    Lnz = L->nz ;
+    Lprev = L->prev ;
+    Lnext = L->next ;
+
+    ASSERT (Lnz != NULL) ;
+    ASSERT (Lnext != NULL && Lprev != NULL) ;
+    PRINT1 (("col %g need %g\n", (double) j, (double) need)) ;
+
+    /* column j cannot have more than n-j entries if all entries are present */
+    need = MIN (need, n-j) ;
+
+    /* compute need in double to avoid integer overflow */
+    if (Common->grow1 >= 1.0)
+    {
+	xneed = (double) need ;
+	xneed = Common->grow1 * xneed + Common->grow2 ;
+	// xneed = MIN (xneed, n-j) ;
+	need = (Int) xneed ;
+    }
+    PRINT1 (("really new need %g current %g\n", (double) need,
+	    (double) (Lp [Lnext [j]] - Lp [j]))) ;
+    // ASSERT (need >= 1 && need <= n-j) ;
+
+    if (Lp [Lnext [j]] - Lp [j] >= (Int) need)
+    {
+	/* no need to reallocate the column, it's already big enough */
+	PRINT1 (("colrealloc: quick return %g %g\n",
+	    (double) (Lp [Lnext [j]] - Lp [j]), (double) need)) ;
+	return (TRUE) ;
+
+    }
+
+    if (Lp [tail] + need > L->nzmax)
+    {
+	/* use double to avoid integer overflow */
+	xneed = (double) need ;
+	if (Common->grow0 < 1.2)	    /* fl. pt. compare, false if NaN */
+	{
+	    /* if grow0 is less than 1.2 or NaN, don't use it */
+	    xneed = 1.2 * (((double) L->nzmax) + xneed + 1) ;
+	}
+	else
+	{
+	    xneed = Common->grow0 * (((double) L->nzmax) + xneed + 1) ;
+	}
+	if (xneed > (double) SIZE_MAX ||
+		!CHOLMOD(reallocate_factor) ((Int) xneed, L, Common))
+	{
+	    /* out of memory, convert to simplicial symbolic */
+	    CHOLMOD(change_factor) (CHOLMOD_PATTERN, L->is_ll, FALSE, TRUE,
+		    TRUE, L, Common) ;
+	    ERROR (CHOLMOD_OUT_OF_MEMORY, "out of memory; L now symbolic") ;
+	    return (FALSE) ;	    /* out of memory */
+	}
+	PRINT1 (("\n=== GROW L from %g to %g\n",
+		    (double) L->nzmax, (double) xneed)) ;
+	/* pack all columns so that each column has at most grow2 free space */
+	CHOLMOD(pack_factor) (L, Common) ;
+	ASSERT (Common->status == CHOLMOD_OK) ;
+	Common->nrealloc_factor++ ;
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* reallocate the column */
+    /* ---------------------------------------------------------------------- */
+
+    Common->nrealloc_col++ ;
+
+    Li = L->i ;
+    Lx = L->x ;
+    Lz = L->z ;
+
+    /* remove j from its current position in the list */
+    Lnext [Lprev [j]] = Lnext [j] ;
+    Lprev [Lnext [j]] = Lprev [j] ;
+
+    /* place j at the end of the list */
+    Lnext [Lprev [tail]] = j ;
+    Lprev [j] = Lprev [tail] ;
+    Lnext [j] = n ;
+    Lprev [tail] = j ;
+
+    /* L is no longer monotonic; columns are out-of-order */
+    L->is_monotonic = FALSE ;
+
+    /* allocate space for column j */
+    pold = Lp [j] ;
+    pnew = Lp [tail] ;
+    Lp [j] = pnew  ;
+    Lp [tail] += need ;
+
+    /* copy column j to the new space */
+    len = Lnz [j] ;
+    for (k = 0 ; k < len ; k++)
+    {
+	Li [pnew + k] = Li [pold + k] ;
+    }
+
+    if (L->xtype == CHOLMOD_REAL)
+    {
+	for (k = 0 ; k < len ; k++)
+	{
+	    Lx [pnew + k] = Lx [pold + k] ;
+	}
+    }
+    else if (L->xtype == CHOLMOD_COMPLEX)
+    {
+	for (k = 0 ; k < len ; k++)
+	{
+	    Lx [2*(pnew + k)  ] = Lx [2*(pold + k)  ] ;
+	    Lx [2*(pnew + k)+1] = Lx [2*(pold + k)+1] ;
+	}
+    }
+    else if (L->xtype == CHOLMOD_ZOMPLEX)
+    {
+	for (k = 0 ; k < len ; k++)
+	{
+	    Lx [pnew + k] = Lx [pold + k] ;
+	    Lz [pnew + k] = Lz [pold + k] ;
+	}
+    }
+
+    DEBUG (CHOLMOD(dump_factor) (L, "colrealloc done", Common)) ;
+
+    /* successful reallocation of column j of L */
+    return (TRUE) ;
+}
+
 
 /* ========================================================================== */
 /* === cholmod_pack_factor ================================================== */
