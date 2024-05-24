@@ -503,8 +503,6 @@ int CHOLMOD(reallocate_column2)
 
     DEBUG (CHOLMOD(dump_factor) (L, "start colrealloc", Common)) ;
 
-    // printf("In cholmod_factor.c reallocate_column2\n");
-
     /* ---------------------------------------------------------------------- */
     /* increase the size of L if needed */
     /* ---------------------------------------------------------------------- */

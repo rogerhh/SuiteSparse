@@ -901,6 +901,8 @@ cholmod_factor *CHOLMOD(analyze_p2)
     /* ---------------------------------------------------------------------- */
     /* supernodal analysis, if requested or if selected automatically */
     /* ---------------------------------------------------------------------- */
+#ifdef NSUPERNODAL
+#endif
 
 #ifndef NSUPERNODAL
     if (Common->supernodal > CHOLMOD_AUTO
